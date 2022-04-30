@@ -100,7 +100,7 @@ connection.onDidChangeConfiguration(change => {
 		documentSettings.clear();
 	} else {
 		globalSettings = <ExampleSettings>(
-			(change.settings.languageServerExample || defaultSettings)
+			(change.settings.snakeLanguageServer || defaultSettings)
 		);
 	}
 
@@ -116,7 +116,7 @@ function getDocumentSettings(resource: string): Thenable<ExampleSettings> {
 	if (!result) {
 		result = connection.workspace.getConfiguration({
 			scopeUri: resource,
-			section: 'languageServerExample'
+			section: 'snakeLanguageServer'
 		});
 		documentSettings.set(resource, result);
 	}
@@ -132,9 +132,17 @@ documents.onDidClose(e => {
 // when the text document first opened or when its content has changed.
 documents.onDidChangeContent(change => {
 	validateTextDocument(change.document);
+	const text = change.document.getText();
+
+	connection.console.log(text);
+});
+
+documents.onWillSave(change => {
+	console.log(change.document);
 });
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
+	console.log({ URI : textDocument.uri} );
 	// In this simple example we get the settings for every validate run.
 	const settings = await getDocumentSettings(textDocument.uri);
 

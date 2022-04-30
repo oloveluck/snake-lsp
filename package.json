@@ -17,21 +17,41 @@
 		"vscode": "^1.63.0"
 	},
 	"activationEvents": [
-		"onLanguage:plaintext"
+		"onLanguage:snake"
 	],
 	"main": "./client/out/extension",
 	"contributes": {
+		"languages": [
+			{
+				"id": "snake",
+				"aliases": [
+					"Snake",
+					"snake"
+				],
+				"extensions": [
+					".snake"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "snake",
+				"scopeName": "source.snake",
+				"path": "./syntaxes/snake.tmLanguage.json"
+			}
+		],
 		"configuration": {
 			"type": "object",
-			"title": "Example configuration",
+			"title": "Snake LSP",
 			"properties": {
-				"languageServerExample.maxNumberOfProblems": {
+				"snakeLanguageServer.maxNumberOfProblems": {
 					"scope": "resource",
 					"type": "number",
 					"default": 100,
 					"description": "Controls the maximum number of problems produced by the server."
 				},
-				"languageServerExample.trace.server": {
+				"snakeLanguageServer.trace.server": {
 					"scope": "window",
 					"type": "string",
 					"enum": [
