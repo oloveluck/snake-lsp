@@ -17,7 +17,6 @@ import {
 	InitializeResult,
 	Location,
 	ReferenceParams,
-	WorkspaceEdit,
 	TextEdit,
 } from 'vscode-languageserver/node';
 
@@ -89,23 +88,35 @@ connection.onInitialized(() => {
 	}
 });
 
-function getTokenAtPosition(docString : string, line : number, col : number) : string | undefined {
+type TokenOffset = { name : string, offset : number }
+
+function getTokenAtPosition(docString : string, line : number, col : number) : TokenOffset | undefined {
+	const getTokenOffset = (words : string[], col : number) : TokenOffset | undefined => {
+		const topWord = words.shift();
+		if (topWord === undefined) {
+			return undefined;
+		}
+		if(col < topWord.length) {
+			return { name : topWord, offset : col }; 
+		}
+		return getTokenOffset(words, col - topWord.length);
+	};
 	const lines = docString.split('\n');
 	if (lines.length <= line) {
 		return undefined;
 	}
-	const tokens = lines[line].substring(col).split(/[\s(=]/);
-	return tokens.length ? tokens[0] : undefined; 
+	const tokens = lines[line].split(/([\s(=])/);
+	return getTokenOffset(tokens, col);
 }
 
 connection.onDefinition((params) => {
 	const { position, textDocument } = params;
 	const { uri }  = textDocument;
 	const docString = documents.get(uri)?.getText();
-	const token = getTokenAtPosition(docString || '', position.line, position.character);
-	if (docString && token) {
+	const tokenOffset = getTokenAtPosition(docString || '', position.line, position.character);
+	if (docString && tokenOffset) {
 		try {
-			const result : number[][] = helpers.getDefinition(position.line + 1, position.character, position.line + 1, position.character + token.length, docString);
+		const result : number[][] = helpers.getDefinition(position.line + 1, position.character - tokenOffset.offset, position.line + 1, position.character + tokenOffset.name.length - tokenOffset.offset, docString);
 			if (result.length !== 2 || result[1].length !== 5) {
 				return undefined;
 			}
@@ -113,7 +124,7 @@ connection.onDefinition((params) => {
 			const location : Location = { uri, range : { start : { line: startLine - 1, character: startChar }, end : { line : endLine - 1 , character: endChar} } }; 
 			return location;
 		} catch (err) {
-			connection.console.log(`Parsing error: ${err}`);
+			console.log(`Parsing error: ${err}`);
 		}
 		}
 	return undefined;
@@ -124,11 +135,11 @@ function getReferenceLocations(params : ReferenceParams, includeSelf : boolean) 
 	const { position, textDocument } = params;
 	const { uri }  = textDocument;
 	const docString = documents.get(uri)?.getText();
-	const token = getTokenAtPosition(docString || '', position.line, position.character);
-	if (docString && token) {
+	const tokenOffset = getTokenAtPosition(docString || '', position.line, position.character);
+	if (docString && tokenOffset) {
 		try {
-			const uses : number[][] = helpers.viewAllUses(position.line + 1, position.character, position.line + 1, position.character + token.length, docString);
-			if (includeSelf) uses.push([0, position.line + 1, position.character, position.line + 1, position.character + token.length]);
+			const uses : number[][] = helpers.viewAllUses(position.line + 1, position.character - tokenOffset.offset, position.line + 1, position.character + tokenOffset.name.length - tokenOffset.offset, docString);
+			if (includeSelf) uses.push([0, position.line + 1, position.character - tokenOffset.offset, position.line + 1, position.character + tokenOffset.name.length - tokenOffset.offset]);
 			uses.forEach(use => {
 				if (use.length === 5) {
 					const [_, startLine, startChar, endLine, endChar] = use;
@@ -137,7 +148,7 @@ function getReferenceLocations(params : ReferenceParams, includeSelf : boolean) 
 				}
 			});
 		} catch(err) {
-			connection.console.log(`Parsing error: ${err}`);
+			console.log(`Parsing error: ${err}`);
 		}
 	}
 	return locations;
