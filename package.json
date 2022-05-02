@@ -1,7 +1,7 @@
 {
-	"name": "lsp-sample",
-	"description": "A language server example",
-	"author": "Microsoft Corporation",
+	"name": "snake-lsp",
+	"description": "A language server for Snake",
+	"author": "Harry Merzin and Owen Loveluck",
 	"license": "MIT",
 	"version": "1.0.0",
 	"repository": {
@@ -67,8 +67,8 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -b",
-		"watch": "tsc -b -w",
+		"compile": "tsc -b && cp server/src/*.js server/out/",
+		"watch": "tsc -b -w && cp server/src/*.js server/out/",
 		"lint": "eslint ./client/src ./server/src --ext .ts,.tsx",
 		"postinstall": "cd client && npm install && cd ../server && npm install && cd ..",
 		"test": "sh ./scripts/e2e.sh"

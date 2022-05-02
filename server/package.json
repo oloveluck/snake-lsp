@@ -1,8 +1,8 @@
 {
-	"name": "lsp-sample-server",
-	"description": "Example implementation of a language server in node.",
+	"name": "snake_lsp_server",
+	"description": "A Language server for snake language",
 	"version": "1.0.0",
-	"author": "Microsoft Corporation",
+	"author": "Harry Merzin and Owen Loveluck",
 	"license": "MIT",
 	"engines": {
 		"node": "*"

@@ -14,8 +14,15 @@ import {
 	CompletionItemKind,
 	TextDocumentPositionParams,
 	TextDocumentSyncKind,
-	InitializeResult
+	InitializeResult,
+	Location,
+	ReferenceParams,
+	WorkspaceEdit,
+	TextEdit,
 } from 'vscode-languageserver/node';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { helpers } = require("./testing.bc.js");
 
 import {
 	TextDocument
@@ -24,7 +31,6 @@ import {
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
 const connection = createConnection(ProposedFeatures.all);
-
 // Create a simple text document manager.
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
@@ -53,6 +59,9 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities: {
 			textDocumentSync: TextDocumentSyncKind.Incremental,
 			// Tell the client that this server supports code completion.
+			definitionProvider: true,
+			referencesProvider: true,
+			renameProvider : true,
 			completionProvider: {
 				resolveProvider: true
 			}
@@ -78,6 +87,76 @@ connection.onInitialized(() => {
 			connection.console.log('Workspace folder change event received.');
 		});
 	}
+});
+
+function getTokenAtPosition(docString : string, line : number, col : number) : string | undefined {
+	const lines = docString.split('\n');
+	if (lines.length <= line) {
+		return undefined;
+	}
+	const tokens = lines[line].substring(col).split(/[\s(=]/);
+	return tokens.length ? tokens[0] : undefined; 
+}
+
+connection.onDefinition((params) => {
+	const { position, textDocument } = params;
+	const { uri }  = textDocument;
+	const docString = documents.get(uri)?.getText();
+	const token = getTokenAtPosition(docString || '', position.line, position.character);
+	if (docString && token) {
+		try {
+			const result : number[][] = helpers.getDefinition(position.line + 1, position.character, position.line + 1, position.character + token.length, docString);
+			if (result.length !== 2 || result[1].length !== 5) {
+				return undefined;
+			}
+			const [_, startLine, startChar, endLine, endChar] = result[1];
+			const location : Location = { uri, range : { start : { line: startLine - 1, character: startChar }, end : { line : endLine - 1 , character: endChar} } }; 
+			return location;
+		} catch (err) {
+			connection.console.log(`Parsing error: ${err}`);
+		}
+		}
+	return undefined;
+});
+
+function getReferenceLocations(params : ReferenceParams, includeSelf : boolean) {
+	const locations : Location[] = [];
+	const { position, textDocument } = params;
+	const { uri }  = textDocument;
+	const docString = documents.get(uri)?.getText();
+	const token = getTokenAtPosition(docString || '', position.line, position.character);
+	if (docString && token) {
+		try {
+			const uses : number[][] = helpers.viewAllUses(position.line + 1, position.character, position.line + 1, position.character + token.length, docString);
+			if (includeSelf) uses.push([0, position.line + 1, position.character, position.line + 1, position.character + token.length]);
+			uses.forEach(use => {
+				if (use.length === 5) {
+					const [_, startLine, startChar, endLine, endChar] = use;
+					const location : Location = { uri, range : { start : { line: startLine - 1, character: startChar}, end : { line : endLine - 1, character: endChar} } }; 
+					locations.push(location);
+				}
+			});
+		} catch(err) {
+			connection.console.log(`Parsing error: ${err}`);
+		}
+	}
+	return locations;
+}
+
+connection.onRenameRequest((params) => {
+	const locations = getReferenceLocations({ ... params, context: {includeDeclaration : true}}, true);
+	const edits = locations.reduce((acc : TextEdit[], loc) => {
+		const newEdit = { range : loc.range, newText : params.newName};
+		acc.push(newEdit);
+		return acc;
+	}, []);
+	const changes : {[uri: string]: TextEdit[]} = {};
+	changes[params.textDocument.uri] = edits;
+	return { changes };
+});
+
+connection.onReferences((params) => {
+	return getReferenceLocations(params, false);
 });
 
 // The example settings
