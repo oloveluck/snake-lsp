@@ -1,0 +1,18 @@
+{
+    "brackets": [
+        ["[", "]"],
+        ["(", ")"]
+    ],
+    "autoClosingPairs": [
+        ["begin", "end"],
+        ["(", ")"],
+        ["'", "'"]
+    ],
+    "surroundingPairs": [
+        ["(", ")"],
+        ["begin ", "end"]
+    ],
+    "wordPattern": {
+        "pattern": "[A-Za-z_'`][A-Za-z_'.0-9]*"
+      }
+}

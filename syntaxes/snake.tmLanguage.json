@@ -4,15 +4,39 @@
 	"patterns": [
 		{
 			"include": "#keywords"
+		},
+		{
+			"include": "#constant"
+		},
+		{
+			"include": "#number"
+		},
+		{
+			"builtins": "#builtin"
 		}
 	],
 	"repository": {
+		"constant": {
+			"match": "\\b(?:true|false|nil)\\b",
+			"name": "constant.language.snake"
+		},
+		"builtin": {
+			"match": "\\b(isbool|istuple|print|isnum|add1|sub1|printStack)\\b",
+			"name": "punctuation.definition.snake"
+		},
 		"keywords": {
 		"patterns": [{
 				"name": "keyword.control.snake",
-				"match": "\\b(if|in|def|let|rec|print|lambda|then|else|true|false|begin|end)\\b"
+				"match": "\\b(if|in|def|let|let\\srec|print|lambda|λ|then|else|begin|end)\\b"
 			}]
+		},
+		"number": {
+				"match": "[0-9]+",
+				"name": "constant.numeric.integer.snake"
 		}
 	},
-	"scopeName": "source.snake"
+	"scopeName": "source.snake",
+	"foldingStartMarker": "\bbegin|^let(?:\\s+rec)?\\s+[a-z_][a-zA-Z0-9_]*\\s+(?!=)\\S)\b",
+	"foldingStopMarker": "(\bend(\\s+in)?[ \t]*(;{1,2}|=)?|^\\s*in)[ \t]*$",
+	"fileTypes": [".snake"]
 }

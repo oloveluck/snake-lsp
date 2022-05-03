@@ -6,13 +6,9 @@ import {
 	createConnection,
 	TextDocuments,
 	Diagnostic,
-	DiagnosticSeverity,
 	ProposedFeatures,
 	InitializeParams,
 	DidChangeConfigurationNotification,
-	CompletionItem,
-	CompletionItemKind,
-	TextDocumentPositionParams,
 	TextDocumentSyncKind,
 	InitializeResult,
 	Location,
@@ -37,8 +33,33 @@ let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasDiagnosticRelatedInformationCapability = false;
 
+
+class TextDocumentCache {
+	private documentCache: {[uri : string] : string};
+	private static instance: TextDocumentCache | undefined;
+	private constructor() {
+		this.documentCache = {};
+	}
+
+	static getInstance() : TextDocumentCache {
+		if (!this.instance) {
+			this.instance = new TextDocumentCache();
+		}
+		return this.instance;
+	}
+
+	getDocument(uri : string) : string | undefined {
+		return this.documentCache[uri];
+	}
+
+	setDocument(uri : string, doc : string) {
+		this.documentCache[uri] = doc;
+	}
+}
+
 connection.onInitialize((params: InitializeParams) => {
 	const capabilities = params.capabilities;
+	TextDocumentCache.getInstance();
 
 	// Does the client support the `workspace/configuration` request?
 	// If not, we fall back using global settings.
@@ -61,9 +82,9 @@ connection.onInitialize((params: InitializeParams) => {
 			definitionProvider: true,
 			referencesProvider: true,
 			renameProvider : true,
-			completionProvider: {
-				resolveProvider: true
-			}
+			// completionProvider: {
+			// 	resolveProvider: true
+			// }
 		}
 	};
 	if (hasWorkspaceFolderCapability) {
@@ -105,15 +126,16 @@ function getTokenAtPosition(docString : string, line : number, col : number) : T
 	if (lines.length <= line) {
 		return undefined;
 	}
-	const tokens = lines[line].split(/([\s(=])/);
+	const tokens = lines[line].split(/([\s)(=])/);
 	return getTokenOffset(tokens, col);
 }
 
 connection.onDefinition((params) => {
+	const textDocumentCache = TextDocumentCache.getInstance();
 	const { position, textDocument } = params;
 	const { uri }  = textDocument;
-	const docString = documents.get(uri)?.getText();
-	const tokenOffset = getTokenAtPosition(docString || '', position.line, position.character);
+	const docString = textDocumentCache.getDocument(uri) || documents.get(uri)?.getText() || '';
+	const tokenOffset = getTokenAtPosition(docString, position.line, position.character);
 	if (docString && tokenOffset) {
 		try {
 		const result : number[][] = helpers.getDefinition(position.line + 1, position.character - tokenOffset.offset, position.line + 1, position.character + tokenOffset.name.length - tokenOffset.offset, docString);
@@ -131,11 +153,12 @@ connection.onDefinition((params) => {
 });
 
 function getReferenceLocations(params : ReferenceParams, includeSelf : boolean) {
+	const textDocumentCache = TextDocumentCache.getInstance();
 	const locations : Location[] = [];
 	const { position, textDocument } = params;
 	const { uri }  = textDocument;
-	const docString = documents.get(uri)?.getText();
-	const tokenOffset = getTokenAtPosition(docString || '', position.line, position.character);
+	const docString = textDocumentCache.getDocument(uri) || documents.get(uri)?.getText() || '';
+	const tokenOffset = getTokenAtPosition(docString, position.line, position.character);
 	if (docString && tokenOffset) {
 		try {
 			const uses : number[][] = helpers.viewAllUses(position.line + 1, position.character - tokenOffset.offset, position.line + 1, position.character + tokenOffset.name.length - tokenOffset.offset, docString);
@@ -221,10 +244,15 @@ documents.onDidClose(e => {
 // The content of a text document has changed. This event is emitted
 // when the text document first opened or when its content has changed.
 documents.onDidChangeContent(change => {
+	const documentCache = TextDocumentCache.getInstance();
 	validateTextDocument(change.document);
 	const text = change.document.getText();
-
-	connection.console.log(text);
+	try {
+		helpers.viewAllUses(0, 0, 0, 1, text);		
+		documentCache.setDocument(change.document.uri, text);
+	} catch (err) {
+		console.log(`Parsing Error: ${err}. Document was not cached.`);
+	}
 });
 
 documents.onWillSave(change => {
@@ -237,45 +265,15 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	const settings = await getDocumentSettings(textDocument.uri);
 
 	// The validator creates diagnostics for all uppercase words length 2 and more
-	const text = textDocument.getText();
-	const pattern = /\b[A-Z]{2,}\b/g;
-	let m: RegExpExecArray | null;
+	// const text = textDocument.getText();
+	// const pattern = /\b[A-Z]{2,}\b/g;
+	// let m: RegExpExecArray | null;
 
-	let problems = 0;
 	const diagnostics: Diagnostic[] = [];
-	while ((m = pattern.exec(text)) && problems < settings.maxNumberOfProblems) {
-		problems++;
-		const diagnostic: Diagnostic = {
-			severity: DiagnosticSeverity.Warning,
-			range: {
-				start: textDocument.positionAt(m.index),
-				end: textDocument.positionAt(m.index + m[0].length)
-			},
-			message: `${m[0]} is all uppercase.`,
-			source: 'ex'
-		};
-		if (hasDiagnosticRelatedInformationCapability) {
-			diagnostic.relatedInformation = [
-				{
-					location: {
-						uri: textDocument.uri,
-						range: Object.assign({}, diagnostic.range)
-					},
-					message: 'Spelling matters'
-				},
-				{
-					location: {
-						uri: textDocument.uri,
-						range: Object.assign({}, diagnostic.range)
-					},
-					message: 'Particularly for names'
-				}
-			];
-		}
-		diagnostics.push(diagnostic);
-	}
+	// diagnostics.push(diagnostic);
+	// }
 
-	// Send the computed diagnostics to VSCode.
+	// // Send the computed diagnostics to VSCode.
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 }
 
@@ -283,42 +281,6 @@ connection.onDidChangeWatchedFiles(_change => {
 	// Monitored files have change in VSCode
 	connection.console.log('We received an file change event');
 });
-
-// This handler provides the initial list of the completion items.
-connection.onCompletion(
-	(_textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
-		// The pass parameter contains the position of the text document in
-		// which code complete got requested. For the example we ignore this
-		// info and always provide the same completion items.
-		return [
-			{
-				label: 'TypeScript',
-				kind: CompletionItemKind.Text,
-				data: 1
-			},
-			{
-				label: 'JavaScript',
-				kind: CompletionItemKind.Text,
-				data: 2
-			}
-		];
-	}
-);
-
-// This handler resolves additional information for the item selected in
-// the completion list.
-connection.onCompletionResolve(
-	(item: CompletionItem): CompletionItem => {
-		if (item.data === 1) {
-			item.detail = 'TypeScript details';
-			item.documentation = 'TypeScript documentation';
-		} else if (item.data === 2) {
-			item.detail = 'JavaScript details';
-			item.documentation = 'JavaScript documentation';
-		}
-		return item;
-	}
-);
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events
