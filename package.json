@@ -70,7 +70,7 @@
 		"compile": "tsc -b && cp server/src/*.js server/out/",
 		"watch": "tsc -b -w && cp server/src/*.js server/out/",
 		"lint": "eslint ./client/src ./server/src --ext .ts,.tsx",
-		"build:ocaml": "cd ocaml-js && npm install && cp _build/default/testing.bc.js ../server/src",
+		"build:ocaml": "cd ocaml-js && npm install && npm run test && cp _build/default/*.bc.js ../server/src && cp _build/default/*.runtime.js ../server/src",
 		"postinstall": "cd client && npm install && cd ../server && npm install && cd ..",
 		"test": "sh ./scripts/e2e.sh"
 	},

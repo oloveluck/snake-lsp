@@ -248,8 +248,9 @@ documents.onDidChangeContent(change => {
 	validateTextDocument(change.document);
 	const text = change.document.getText();
 	try {
-		helpers.viewAllUses(0, 0, 0, 1, text);		
-		documentCache.setDocument(change.document.uri, text);
+		if (helpers.doesParse(text)) {
+			documentCache.setDocument(change.document.uri, text);
+		}	
 	} catch (err) {
 		console.log(`Parsing Error: ${err}. Document was not cached.`);
 	}
